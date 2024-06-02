@@ -29,6 +29,9 @@ async function run() {
     const usersCollection = client
       .db("studyAlliance")
       .collection("usersCollection");
+    const sessionCollection = client
+      .db("studyAlliance")
+      .collection("allSession");
 
     app.put("/user", async (req, res) => {
       const user = req.body;
@@ -59,9 +62,14 @@ async function run() {
       const {name} = req.query;
       // console.log(name)
       let query = {}
-      if(name) {
-        query.name = { $regex: name, $options: 'i' };
-      }
+       if (name) {
+         query = {
+           $or: [
+             { name: { $regex: name, $options: "i" } },
+             { email: { $regex: name, $options: "i" } },
+           ],
+         };
+       }
       // console.log(query)
       const result = await usersCollection.find(query).toArray();
       res.send(result);
@@ -112,6 +120,79 @@ async function run() {
         res.send(result);
       }
     );
+
+
+
+
+    app.post('/all-session', async(req, res)=> {
+      const session = req.body;
+      const result = await sessionCollection.insertOne(session)
+      res.send(result)
+    })
+
+
+
+
+    app.get("/all-session", async(req, res)=> {
+      const query = { status: { $ne: "rejected" } };
+      const result = await sessionCollection.find(query).toArray();
+      res.send(result)
+    });
+
+
+
+
+    app.patch('/all-session/admin/:id', async (req, res) => {
+        const id = req.params.id;
+        const {status, fee} = req.body;
+        // console.log(status, fee)
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            status: status,
+            fee: fee,
+          },
+        };
+        const result = await sessionCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
+
+    app.patch('/req-session/admin/:id', async (req, res) => {
+        const id = req.params.id;
+        const {status} = req.body;
+      
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            status: status,
+          },
+        };
+        const result = await sessionCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
+
+    app.delete("/all-session/admin/:id", async(req, res)=> {
+      const id = req.params.id;
+      const query = {_id: new ObjectId(id)}
+      const result = await sessionCollection.deleteOne(query);
+      res.send(result)
+    });
+
+
+
+app.get("/my-session/:email", async(req, res)=> {
+  const email = req.params.email;
+  const query = {tutorEmail: email}
+  const result = await sessionCollection.find(query).toArray()
+  res.send(result)
+});
+
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
     console.log(
