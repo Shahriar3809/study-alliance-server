@@ -32,6 +32,9 @@ async function run() {
     const sessionCollection = client
       .db("studyAlliance")
       .collection("allSession");
+    const materialsCollection = client
+      .db("studyAlliance")
+      .collection("allMaterials");
 
     app.put("/user", async (req, res) => {
       const user = req.body;
@@ -189,6 +192,29 @@ app.get("/my-session/:email", async(req, res)=> {
   res.send(result)
 });
 
+
+app.get("/my-approved-session/:email", async (req, res) => {
+  const email = req.params.email;
+  const query = { tutorEmail: email, status: "approved" };
+  const result = await sessionCollection.find(query).toArray();
+  // console.log(result)
+  res.send(result);
+});
+
+
+app.get('/singleSession/:id', async(req, res)=> {
+  const id = req.params.id;
+  const query = {_id: new ObjectId(id)};
+  const result = await sessionCollection.findOne(query);
+  res.send(result)
+})
+
+
+app.post("/tutor/upload-materials", async(req, res)=> {
+  const materialsData = req.body;
+  const result = await materialsCollection.insertOne(materialsData);
+  res.send(result)
+});
 
 
 
