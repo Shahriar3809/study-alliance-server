@@ -187,9 +187,9 @@ async function run() {
 
 app.get("/my-session/:email", async(req, res)=> {
   const email = req.params.email;
-  const query = {tutorEmail: email}
-  const result = await sessionCollection.find(query).toArray()
-  res.send(result)
+  const query = { tutorEmail: email }; //status: { $ne: "pending" }
+  const result = await sessionCollection.find(query).toArray();
+  res.send(result);
 });
 
 
@@ -231,6 +231,44 @@ app.delete("/materials/tutor/:id", async(req, res)=> {
   const result = await materialsCollection.deleteOne(query);
   res.send(result)
 });
+
+
+app.get("/tutor/get-materials/:id", async(req, res)=> {
+  const id = req.params.id;
+  const query = {_id: new ObjectId(id)};
+  const result = await materialsCollection.findOne(query);
+  res.send(result)
+});
+
+
+
+  app.patch("/tutor/update-materials/:id", async (req, res) => {
+   const { image, materialsTitle, link } = req.body;
+   const id = req.params.id;
+  //  console.log(req.body, id)
+    const query = { _id: new ObjectId(id) };
+    const updatedDoc = {
+      $set: {
+        image: image,
+        materialsTitle: materialsTitle,
+        link: link
+      },
+    };
+    const result = await materialsCollection.updateOne(query, updatedDoc);
+    res.send(result);
+  });
+
+
+  app.get("/admin/all-materials", async (req, res)=> {
+    const result = await materialsCollection.find().toArray()
+    res.send(result)
+  });
+
+
+
+
+
+
 
 
 
