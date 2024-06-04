@@ -264,10 +264,44 @@ app.get("/tutor/get-materials/:id", async(req, res)=> {
     res.send(result)
   });
 
+  app.get("/all-approved-session", async (req, res) => {
+    const limit = parseInt(req.query.limit) || 0; // If limit is not provided, fetch all sessions
+    const query = { status: "approved" };
+    const result = await sessionCollection.find(query).limit(limit).toArray();
+    res.send(result);
+  });
 
 
 
 
+
+  app.get("/session-details/:id", async(req, res)=> {
+    const id = req.params.id;
+    const query = { _id: new ObjectId(id) };
+    const result = await sessionCollection.findOne(query);
+    res.send(result);
+  });
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ 
 
 
 
