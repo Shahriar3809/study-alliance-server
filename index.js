@@ -36,6 +36,13 @@ async function run() {
       .db("studyAlliance")
       .collection("allMaterials");
 
+    const bookedSessionCollection = client
+      .db("studyAlliance")
+      .collection("bookedSession");
+    const noteCollection = client
+      .db("studyAlliance")
+      .collection("allNotes");
+
     app.put("/user", async (req, res) => {
       const user = req.body;
       // console.log(user)
@@ -225,6 +232,14 @@ app.get("/my-materials/:email", async(req, res)=> {
 });
 
 
+app.get("/materials-for-this-session/:id", async(req, res)=> {
+  const id = req.params.id;
+  const query = { sessionId: id };
+  const result = await materialsCollection.find(query).toArray();
+  res.send(result);
+});
+
+
 app.delete("/materials/tutor/:id", async(req, res)=> {
   const id = req.params.id;
   const query = {_id: new ObjectId(id)}
@@ -283,17 +298,56 @@ app.get("/tutor/get-materials/:id", async(req, res)=> {
   });
 
 
+  app.post('/booked-session', async(req, res)=> {
+    const bookedData = req.body;
+    const isExist = await bookedSessionCollection.findOne(bookedData)
+    // console.log('exist-----------------------------',isExist)
+    if(isExist) {
+      return res.send({exist: true})
+    }
+    const result = await bookedSessionCollection.insertOne(bookedData)
+    res.send(result)
+  })
 
 
 
 
 
 
+  // student----------------------------------------
+
+  app.get("/my-booked-session/:email", async(req, res)=> {
+    const email = req.params.email;
+    const query = {studentEmail: email }
+    // console.log(email, "Email")
+    const result = await bookedSessionCollection.find(query).toArray();
+    res.send(result)
+    // console.log(result)
+  });
+
+
+app.post('/save-note', async(req, res)=> {
+  const data = req.body;
+  const result = await noteCollection.insertOne(data);
+  res.send(result)
+})
 
 
 
+app.get("/my-notes/:email", async(req, res)=> {
+  const email = req.params.email;
+  const query = {studentEmail: email}
+  const result = await noteCollection.find(query).toArray()
+  res.send(result)
+});
 
-
+app.delete("/delete-notes/:id", async (req, res) => {
+  const id = req.params.id;
+  // console.log(id)
+  const query = { _id: new ObjectId(id) };
+  const result = await noteCollection.deleteOne(query);
+  res.send(result);
+});
 
 
 
