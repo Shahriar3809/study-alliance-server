@@ -42,6 +42,9 @@ async function run() {
     const noteCollection = client
       .db("studyAlliance")
       .collection("allNotes");
+    const ratingsCollection = client
+      .db("studyAlliance")
+      .collection("allRatings");
 
     app.put("/user", async (req, res) => {
       const user = req.body;
@@ -352,6 +355,53 @@ app.delete("/delete-notes/:id", async (req, res) => {
 
 
 
+// Tutor
+app.get('/tutors', async(req, res)=> {
+  const query = {role: 'tutor'};
+  const result = await usersCollection.find(query).toArray();
+  res.send(result)
+})
+
+
+
+
+
+
+
+
+
+
+
+
+  app.put("/save-ratings/:id", async (req, res) => {
+    const ratingsData = req.body;
+    const email = req.body.email;
+    console.log(email)
+    const query = {sessionId: req.params.id, email: email }
+    const options = { upsert: true };
+    const updatedDoc = {
+      $set: {
+        ...ratingsData,
+      },
+    };
+    const isExist = ratingsCollection.findOne(query)
+    if(isExist) {
+      const result = await ratingsCollection.updateOne(query, updatedDoc, options);
+     return res.send(result);
+    }
+    const result = await ratingsCollection.insertOne(ratingsData)
+    res.send(result)
+  });
+
+
+  app.get('/review/:id', async(req, res)=> {
+    const id = req.params.id;
+    const query = {sessionId: id};
+    const result = await ratingsCollection.find(query).toArray()
+    res.send(result)
+  })
+
+  
 
 
 
