@@ -371,27 +371,36 @@ app.get('/tutors', async(req, res)=> {
 
 
 
+app.put("/save-ratings/:id", async (req, res) => {
+  const ratingsData = req.body;
+  const email = req.body.email;
+  console.log(email);
 
+  const query = { sessionId: req.params.id, email: email };
+  const options = { upsert: true };
+  const updatedDoc = {
+    $set: {
+      ...ratingsData,
+    },
+  };
 
-  app.put("/save-ratings/:id", async (req, res) => {
-    const ratingsData = req.body;
-    const email = req.body.email;
-    console.log(email)
-    const query = {sessionId: req.params.id, email: email }
-    const options = { upsert: true };
-    const updatedDoc = {
-      $set: {
-        ...ratingsData,
-      },
-    };
-    const isExist = ratingsCollection.findOne(query)
-    if(isExist) {
-      const result = await ratingsCollection.updateOne(query, updatedDoc, options);
-     return res.send(result);
+  try {
+    const isExist = await ratingsCollection.findOne(query);
+    let result;
+
+    if (isExist) {
+      result = await ratingsCollection.updateOne(query, updatedDoc, options);
+    } else {
+      result = await ratingsCollection.insertOne(ratingsData);
     }
-    const result = await ratingsCollection.insertOne(ratingsData)
-    res.send(result)
-  });
+
+    res.send(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Internal Server Error" });
+  }
+});
+
 
 
   app.get('/review/:id', async(req, res)=> {
@@ -401,10 +410,29 @@ app.get('/tutors', async(req, res)=> {
     res.send(result)
   })
 
-  
+ app.get("/get-note-data/:id", async (req, res)=> {
+  const id = req.params.id;
+  const query = {_id: new ObjectId(id)}
+  const result = await noteCollection.findOne(query)
+  res.send(result)
+ });
 
 
 
+app.put('/edit-note/:id', async(req, res)=> {
+  const id = req.params.id;
+  const noteData = req.body;
+
+  const query = {_id: new ObjectId(id)}
+const updatedDoc = {
+  $set: {
+    noteTitle: noteData.noteTitle,
+    noteDetails: noteData.noteDetails,
+  },
+};
+const result = await noteCollection.updateOne(query, updatedDoc)
+res.send(result)
+})
  
 
 
