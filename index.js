@@ -159,16 +159,19 @@ async function run() {
 
     app.patch("/all-session/admin/:id", async (req, res) => {
       const id = req.params.id;
-      const { status, fee } = req.body;
-      // console.log(status, fee)
+      const { status, rejectionReason, feedback, fee } = req.body;
+      // console.log(req.body)
       const query = { _id: new ObjectId(id) };
+      const options = { upsert: true };
       const updatedDoc = {
         $set: {
           status: status,
           fee: fee,
+          rejectionReason: rejectionReason,
+          feedback: feedback
         },
       };
-      const result = await sessionCollection.updateOne(query, updatedDoc);
+      const result = await sessionCollection.updateOne(query, updatedDoc, options);
       res.send(result);
     });
 
@@ -413,6 +416,38 @@ async function run() {
       const result = await noteCollection.updateOne(query, updatedDoc);
       res.send(result);
     });
+
+
+app.get("/rejected-session", async(req, res)=> {
+  const query = {status: 'rejected'}
+  const result = await sessionCollection.find(query).toArray()
+  res.send(result)
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     await client.db("admin").command({ ping: 1 });
     console.log(
