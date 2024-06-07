@@ -3,7 +3,7 @@ const app = express();
 const cors = require("cors");
 require("dotenv").config();
 // const jwt = require("jsonwebtoken");
-// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
@@ -357,7 +357,7 @@ async function run() {
     app.put("/save-ratings/:id", async (req, res) => {
       const ratingsData = req.body;
       const email = req.body.email;
-      console.log(email);
+      // console.log(email);
 
       const query = { sessionId: req.params.id, email: email };
       const options = { upsert: true };
@@ -380,7 +380,7 @@ async function run() {
         } else {
           result = await ratingsCollection.insertOne(ratingsData);
         }
-
+// console.log(result)
         res.send(result);
       } catch (error) {
         console.error(error);
@@ -428,11 +428,43 @@ app.get("/rejected-session", async(req, res)=> {
 
 
 
+app.get("/my-payment-item-data/:id", async (req, res) => {
+  const id = req.params.id;
+  try {
+    const query = { _id: new ObjectId(id) };
+    const result = await sessionCollection.findOne(query);
+    if (!result) {
+      return res.status(404).send({ message: "Item not found" });
+    }
+    res.send(result);
+  } catch (error) {
+    console.error(error);
+    res.status(500).send({ message: "Server error" });
+  }
+});
 
 
 
-
-
+// ------------------------------------------------------
+app.post("/create-payment-intent", async (req, res) => {
+  const { price } = req.body;
+  if (!price) {
+    return res.status(400).send({ error: "Price is required" });
+  }
+ 
+ const amount = parseInt(price * 100);
+ try {
+   const paymentIntent = await stripe.paymentIntents.create({
+     amount: amount,
+     currency: "usd",
+     payment_method_types: ["card"],
+   });
+   res.send({ clientSecret: paymentIntent.client_secret });
+ } catch (error) {
+   console.error("Error creating payment intent:", error);
+   res.status(500).send({ error: error.message });
+ }
+});
 
 
 
