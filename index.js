@@ -2,19 +2,16 @@ const express = require("express");
 const app = express();
 const cors = require("cors");
 require("dotenv").config();
-// const jwt = require("jsonwebtoken");
+const jwt = require("jsonwebtoken");
 const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 const port = process.env.PORT || 3000;
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
 
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASSWORD}@cluster0.jryyhrc.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
-
 
 const client = new MongoClient(uri, {
   serverApi: {
@@ -44,7 +41,58 @@ async function run() {
       .db("studyAlliance")
       .collection("allRatings");
 
-    app.put("/user", async (req, res) => {
+
+    const verifyToken = (req, res, next) => {
+      // console.log(req.headers.authorization);
+      if (!req.headers.authorization) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+      const token = req.headers.authorization.split(" ")[1];
+      if (!token) {
+        return res.status(401).send({ message: "Unauthorized Access" });
+      }
+      jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
+        if (error) {
+          return res.status(401).send({ message: "Unauthorized Access" });
+        } else {
+          req.decoded = decoded;
+          next();
+        }
+      });
+    };
+
+
+    const verifyAdmin = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isAdmin = user?.role === "admin";
+      if (!isAdmin) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+
+    // const verifyTutor = async (req, res, next) => {
+    //   const email = req.decoded.email;
+    //   const query = { email: email };
+    //   const user = await usersCollection.findOne(query);
+    //   const isTutor = user?.role === "tutor";
+    //   if (!isTutor) {
+    //     return res.status(403).send({ message: "Forbidden Access" });
+    //   }
+    //   next();
+    // };
+
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "7d",
+      });
+      res.send({ token });
+    });
+
+    app.put("/user",  async (req, res) => {
       const user = req.body;
       // console.log(user)
       const query = { email: user?.email };
@@ -67,8 +115,9 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
       const { name } = req.query;
+      // console.log(req.headers);
       // console.log(name)
       let query = {};
       if (name) {
@@ -84,11 +133,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/user/admin/:email", async (req, res) => {
+
+
+    app.get("/user/admin/:email", verifyToken,  async (req, res) => {
       const email = req.params.email;
-      //  if (email !== req.decoded.email) {
-      //    return res.status(403).send({ message: "Un-Authorized Access" });
-      //  }
+      console.log(email, req.decoded.email)
+       if (email !== req.decoded.email) {
+         return res.status(403).send({ message: "Un-Authorized Access" });
+       }
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       let admin = false;
@@ -98,11 +150,11 @@ async function run() {
       res.send({ admin });
     });
 
-    app.get("/user/tutor/:email", async (req, res) => {
+    app.get("/user/tutor/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
-      //  if (email !== req.decoded.email) {
-      //    return res.status(403).send({ message: "Un-Authorized Access" });
-      //  }
+       if (email !== req.decoded.email) {
+         return res.status(403).send({ message: "Un-Authorized Access" });
+       }
       const query = { email: email };
       const user = await usersCollection.findOne(query);
       let tutor = false;
@@ -128,12 +180,11 @@ async function run() {
 
     // --------------------------------------------------------------
 
-    app.post('/all-session', async(req, res)=> {
+    app.post("/all-session", async (req, res) => {
       const data = req.body;
-      const result = await sessionCollection.insertOne(data)
-      res.send(result)
-    })
-
+      const result = await sessionCollection.insertOne(data);
+      res.send(result);
+    });
 
     // Server code to handle pagination
     app.get("/all-session", async (req, res) => {
@@ -168,10 +219,14 @@ async function run() {
           status: status,
           fee: fee,
           rejectionReason: rejectionReason,
-          feedback: feedback
+          feedback: feedback,
         },
       };
-      const result = await sessionCollection.updateOne(query, updatedDoc, options);
+      const result = await sessionCollection.updateOne(
+        query,
+        updatedDoc,
+        options
+      );
       res.send(result);
     });
 
@@ -380,7 +435,7 @@ async function run() {
         } else {
           result = await ratingsCollection.insertOne(ratingsData);
         }
-// console.log(result)
+        // console.log(result)
         res.send(result);
       } catch (error) {
         console.error(error);
@@ -417,69 +472,47 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/rejected-session", async (req, res) => {
+      const query = { status: "rejected" };
+      const result = await sessionCollection.find(query).toArray();
+      res.send(result);
+    });
 
-app.get("/rejected-session", async(req, res)=> {
-  const query = {status: 'rejected'}
-  const result = await sessionCollection.find(query).toArray()
-  res.send(result)
-});
+    app.get("/my-payment-item-data/:id", async (req, res) => {
+      const id = req.params.id;
+      try {
+        const query = { _id: new ObjectId(id) };
+        const result = await sessionCollection.findOne(query);
+        if (!result) {
+          return res.status(404).send({ message: "Item not found" });
+        }
+        res.send(result);
+      } catch (error) {
+        console.error(error);
+        res.status(500).send({ message: "Server error" });
+      }
+    });
 
+    // ------------------------------------------------------
+    app.post("/create-payment-intent", async (req, res) => {
+      const { price } = req.body;
+      if (!price) {
+        return res.status(400).send({ error: "Price is required" });
+      }
 
-
-
-
-app.get("/my-payment-item-data/:id", async (req, res) => {
-  const id = req.params.id;
-  try {
-    const query = { _id: new ObjectId(id) };
-    const result = await sessionCollection.findOne(query);
-    if (!result) {
-      return res.status(404).send({ message: "Item not found" });
-    }
-    res.send(result);
-  } catch (error) {
-    console.error(error);
-    res.status(500).send({ message: "Server error" });
-  }
-});
-
-
-
-// ------------------------------------------------------
-app.post("/create-payment-intent", async (req, res) => {
-  const { price } = req.body;
-  if (!price) {
-    return res.status(400).send({ error: "Price is required" });
-  }
- 
- const amount = parseInt(price * 100);
- try {
-   const paymentIntent = await stripe.paymentIntents.create({
-     amount: amount,
-     currency: "usd",
-     payment_method_types: ["card"],
-   });
-   res.send({ clientSecret: paymentIntent.client_secret });
- } catch (error) {
-   console.error("Error creating payment intent:", error);
-   res.status(500).send({ error: error.message });
- }
-});
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+      const amount = parseInt(price * 100);
+      try {
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amount,
+          currency: "usd",
+          payment_method_types: ["card"],
+        });
+        res.send({ clientSecret: paymentIntent.client_secret });
+      } catch (error) {
+        console.error("Error creating payment intent:", error);
+        res.status(500).send({ error: error.message });
+      }
+    });
 
     await client.db("admin").command({ ping: 1 });
     console.log(
@@ -500,55 +533,10 @@ app.listen(port, () => {
   console.log("Study Alliance is running in port", port);
 });
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 // const jwt = require("jsonwebtoken");
 // const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
 // const port = process.env.PORT || 3000;
 // const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-
-
-
 
 // async function run() {
 //   try {
@@ -619,36 +607,36 @@ app.listen(port, () => {
 //       res.send(result);
 //     });
 
-    // app.get("/user/admin/:email", verifyToken, async (req, res) => {
-    //   const email = req.params.email;
-    //   if (email !== req.decoded.email) {
-    //     return res.status(403).send({ message: "Un-Authorized Access" });
-    //   }
-    //   const query = { email: email };
-    //   const user = await usersCollection.findOne(query);
-    //   let admin = false;
-    //   if (user) {
-    //     admin = user?.role === "admin";
-    //   }
-    //   res.send({ admin });
-    // });
+// app.get("/user/admin/:email", verifyToken, async (req, res) => {
+//   const email = req.params.email;
+//   if (email !== req.decoded.email) {
+//     return res.status(403).send({ message: "Un-Authorized Access" });
+//   }
+//   const query = { email: email };
+//   const user = await usersCollection.findOne(query);
+//   let admin = false;
+//   if (user) {
+//     admin = user?.role === "admin";
+//   }
+//   res.send({ admin });
+// });
 
-    // app.patch(
-    //   "/users/admin/:id",
-    //   verifyToken,
-    //   verifyAdmin,
-    //   async (req, res) => {
-    //     const id = req.params.id;
-    //     const query = { _id: new ObjectId(id) };
-    //     const updatedDoc = {
-    //       $set: {
-    //         role: "admin",
-    //       },
-    //     };
-    //     const result = await usersCollection.updateOne(query, updatedDoc);
-    //     res.send(result);
-    //   }
-    // );
+// app.patch(
+//   "/users/admin/:id",
+//   verifyToken,
+//   verifyAdmin,
+//   async (req, res) => {
+//     const id = req.params.id;
+//     const query = { _id: new ObjectId(id) };
+//     const updatedDoc = {
+//       $set: {
+//         role: "admin",
+//       },
+//     };
+//     const result = await usersCollection.updateOne(query, updatedDoc);
+//     res.send(result);
+//   }
+// );
 
 //     app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
 //       const id = req.params.id;
