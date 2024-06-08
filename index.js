@@ -42,8 +42,10 @@ async function run() {
       .collection("allRatings");
 
 
+
+
     const verifyToken = (req, res, next) => {
-      // console.log(req.headers.authorization);
+      // console.log('---',req.headers.authorization);
       if (!req.headers.authorization) {
         return res.status(401).send({ message: "Unauthorized Access" });
       }
@@ -62,6 +64,7 @@ async function run() {
     };
 
 
+
     const verifyAdmin = async (req, res, next) => {
       const email = req.decoded.email;
       const query = { email: email };
@@ -73,16 +76,18 @@ async function run() {
       next();
     };
 
-    // const verifyTutor = async (req, res, next) => {
-    //   const email = req.decoded.email;
-    //   const query = { email: email };
-    //   const user = await usersCollection.findOne(query);
-    //   const isTutor = user?.role === "tutor";
-    //   if (!isTutor) {
-    //     return res.status(403).send({ message: "Forbidden Access" });
-    //   }
-    //   next();
-    // };
+    
+
+    const verifyTutor = async (req, res, next) => {
+      const email = req.decoded.email;
+      const query = { email: email };
+      const user = await usersCollection.findOne(query);
+      const isTutor = user?.role === "tutor";
+      if (!isTutor) {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
 
     app.post("/jwt", async (req, res) => {
       const user = req.body;
@@ -134,10 +139,10 @@ async function run() {
     });
 
 
-
+// no need to verify admin
     app.get("/user/admin/:email", verifyToken,  async (req, res) => {
       const email = req.params.email;
-      console.log(email, req.decoded.email)
+      // console.log(email, req.decoded.email)
        if (email !== req.decoded.email) {
          return res.status(403).send({ message: "Un-Authorized Access" });
        }
@@ -150,6 +155,7 @@ async function run() {
       res.send({ admin });
     });
 
+    // no need to verify tutor
     app.get("/user/tutor/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
        if (email !== req.decoded.email) {
@@ -164,19 +170,25 @@ async function run() {
       res.send({ tutor });
     });
 
-    app.patch("/users/admin/:id", async (req, res) => {
-      const id = req.params.id;
-      const update = req.body;
-      console.log(id, update);
-      const query = { _id: new ObjectId(id) };
-      const updatedDoc = {
-        $set: {
-          role: update.role,
-        },
-      };
-      const result = await usersCollection.updateOne(query, updatedDoc);
-      res.send(result);
-    });
+
+    app.patch(
+      "/users/admin/:id",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const id = req.params.id;
+        const update = req.body;
+        // console.log(id, update);
+        const query = { _id: new ObjectId(id) };
+        const updatedDoc = {
+          $set: {
+            role: update.role,
+          },
+        };
+        const result = await usersCollection.updateOne(query, updatedDoc);
+        res.send(result);
+      }
+    );
 
     // --------------------------------------------------------------
 
@@ -187,7 +199,7 @@ async function run() {
     });
 
     // Server code to handle pagination
-    app.get("/all-session", async (req, res) => {
+    app.get("/all-session", verifyToken, verifyAdmin, async (req, res) => {
       const page = parseInt(req.query.page) || 0;
       const limit = parseInt(req.query.limit) || 10;
 
@@ -208,7 +220,7 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/all-session/admin/:id", async (req, res) => {
+    app.patch("/all-session/admin/:id",  async (req, res) => {
       const id = req.params.id;
       const { status, rejectionReason, feedback, fee } = req.body;
       // console.log(req.body)
@@ -251,22 +263,32 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/my-session/:email", async (req, res) => {
-      const email = req.params.email;
-      const query = { tutorEmail: email }; //status: { $ne: "pending" }
-      const result = await sessionCollection.find(query).toArray();
-      res.send(result);
-    });
+    app.get(
+      "/my-session/:email",
+      verifyToken,
+      verifyTutor,
+      async (req, res) => {
+        const email = req.params.email;
+        const query = { tutorEmail: email }; //status: { $ne: "pending" }
+        const result = await sessionCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
 
-    app.get("/my-approved-session/:email", async (req, res) => {
-      const email = req.params.email;
-      const query = { tutorEmail: email, status: "approved" };
-      const result = await sessionCollection.find(query).toArray();
-      // console.log(result)
-      res.send(result);
-    });
+    app.get(
+      "/my-approved-session/:email",
+      verifyToken,
+      verifyTutor,
+      async (req, res) => {
+        const email = req.params.email;
+        const query = { tutorEmail: email, status: "approved" };
+        const result = await sessionCollection.find(query).toArray();
+        // console.log(result)
+        res.send(result);
+      }
+    );
 
-    app.get("/singleSession/:id", async (req, res) => {
+    app.get("/singleSession/:id",  async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await sessionCollection.findOne(query);
@@ -280,13 +302,18 @@ async function run() {
     });
 
     // --------------------------------------------------------------------------------------
-    app.get("/my-materials/:email", async (req, res) => {
-      const data = req.query;
-      const email = req.params.email;
-      const query = { email: email };
-      const result = await materialsCollection.find(query).toArray();
-      res.send(result);
-    });
+    app.get(
+      "/my-materials/:email",
+      verifyToken,
+      verifyTutor,
+      async (req, res) => {
+        const data = req.query;
+        const email = req.params.email;
+        const query = { email: email };
+        const result = await materialsCollection.find(query).toArray();
+        res.send(result);
+      }
+    );
 
     app.get("/materials-for-this-session/:id", async (req, res) => {
       const id = req.params.id;
@@ -326,18 +353,23 @@ async function run() {
     });
 
     // Adjusted endpoint to support pagination
-    app.get("/admin/all-materials", async (req, res) => {
-      const page = parseInt(req.query.page) || 0;
-      const limit = parseInt(req.query.limit) || 2;
-      const skip = page * limit;
+    app.get(
+      "/admin/all-materials",
+      verifyToken,
+      verifyAdmin,
+      async (req, res) => {
+        const page = parseInt(req.query.page) || 0;
+        const limit = parseInt(req.query.limit) || 2;
+        const skip = page * limit;
 
-      const result = await materialsCollection
-        .find()
-        .skip(skip)
-        .limit(limit)
-        .toArray();
-      res.send(result);
-    });
+        const result = await materialsCollection
+          .find()
+          .skip(skip)
+          .limit(limit)
+          .toArray();
+        res.send(result);
+      }
+    );
 
     // Adjusted endpoint to get the total count of materials
     app.get("/item-count", async (req, res) => {
@@ -372,7 +404,7 @@ async function run() {
 
     // student----------------------------------------
 
-    app.get("/my-booked-session/:email", async (req, res) => {
+    app.get("/my-booked-session/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { studentEmail: email };
       // console.log(email, "Email")
@@ -387,7 +419,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/my-notes/:email", async (req, res) => {
+    app.get("/my-notes/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       const query = { studentEmail: email };
       const result = await noteCollection.find(query).toArray();
@@ -450,14 +482,14 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/get-note-data/:id", async (req, res) => {
+    app.get("/get-note-data/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await noteCollection.findOne(query);
       res.send(result);
     });
 
-    app.put("/edit-note/:id", async (req, res) => {
+    app.put("/edit-note/:id", verifyToken, async (req, res) => {
       const id = req.params.id;
       const noteData = req.body;
 
@@ -472,7 +504,7 @@ async function run() {
       res.send(result);
     });
 
-    app.get("/rejected-session", async (req, res) => {
+    app.get("/rejected-session", verifyToken, verifyAdmin, async (req, res) => {
       const query = { status: "rejected" };
       const result = await sessionCollection.find(query).toArray();
       res.send(result);
@@ -532,305 +564,3 @@ app.get("/", (req, res) => {
 app.listen(port, () => {
   console.log("Study Alliance is running in port", port);
 });
-
-// const jwt = require("jsonwebtoken");
-// const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
-// const port = process.env.PORT || 3000;
-// const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-
-// async function run() {
-//   try {
-//     // await client.connect()
-
-//     const menuCollection = client.db("bistroDb").collection("menu");
-//     const reviewsCollection = client.db("bistroDb").collection("reviews");
-//     const cartsCollection = client.db("bistroDb").collection("cart");
-//     const usersCollection = client.db("bistroDb").collection("users");
-//     const paymentCollection = client.db("bistroDb").collection("payments");
-
-//     // JWT
-//     app.post("/jwt", async (req, res) => {
-//       const user = req.body;
-//       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
-//         expiresIn: "7d",
-//       });
-//       res.send({ token });
-//     });
-
-//     // Verify TOKEN Middleware
-//     const verifyToken = (req, res, next) => {
-//       // console.log(req.headers.authorization);
-//       if (!req.headers.authorization) {
-//         return res.status(401).send({ message: "Unauthorized Access" });
-//       }
-//       const token = req.headers.authorization.split(" ")[1];
-//       if (!token) {
-//         return res.status(401).send({ message: "Unauthorized Access" });
-//       }
-//       jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (error, decoded) => {
-//         if (error) {
-//           return res.status(401).send({ message: "Unauthorized Access" });
-//         } else {
-//           req.decoded = decoded;
-//           next();
-//         }
-//       });
-//     };
-
-//     const verifyAdmin = async (req, res, next) => {
-//       const email = req.decoded.email;
-//       const query = { email: email };
-//       const user = await usersCollection.findOne(query);
-//       const isAdmin = user?.role === "admin";
-//       if (!isAdmin) {
-//         return res.status(403).send({ message: "Forbidden Access" });
-//       }
-//       next();
-//     };
-
-//     // User
-//     app.post("/users", async (req, res) => {
-//       const user = req.body;
-
-//       // insert email if user doesn't exist
-//       const query = { email: user.email };
-//       const existingUser = await usersCollection.findOne(query);
-//       if (existingUser) {
-//         return res.send({ message: "User Already Exist", insertedId: null });
-//       }
-//       const result = await usersCollection.insertOne(user);
-//       res.send(result);
-//     });
-
-//     app.get("/users", verifyToken, verifyAdmin, async (req, res) => {
-//       const result = await usersCollection.find().toArray();
-//       res.send(result);
-//     });
-
-// app.get("/user/admin/:email", verifyToken, async (req, res) => {
-//   const email = req.params.email;
-//   if (email !== req.decoded.email) {
-//     return res.status(403).send({ message: "Un-Authorized Access" });
-//   }
-//   const query = { email: email };
-//   const user = await usersCollection.findOne(query);
-//   let admin = false;
-//   if (user) {
-//     admin = user?.role === "admin";
-//   }
-//   res.send({ admin });
-// });
-
-// app.patch(
-//   "/users/admin/:id",
-//   verifyToken,
-//   verifyAdmin,
-//   async (req, res) => {
-//     const id = req.params.id;
-//     const query = { _id: new ObjectId(id) };
-//     const updatedDoc = {
-//       $set: {
-//         role: "admin",
-//       },
-//     };
-//     const result = await usersCollection.updateOne(query, updatedDoc);
-//     res.send(result);
-//   }
-// );
-
-//     app.delete("/users/:id", verifyToken, verifyAdmin, async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await usersCollection.deleteOne(query);
-//       res.send(result);
-//     });
-
-//     app.get("/menu", async (req, res) => {
-//       const result = await menuCollection.find().toArray();
-//       res.send(result);
-//     });
-
-//     app.post("/menu", verifyToken, verifyAdmin, async (req, res) => {
-//       const item = req.body;
-//       const result = await menuCollection.insertOne(item);
-//       res.send(result);
-//     });
-
-//     app.get("/reviews", async (req, res) => {
-//       const result = await reviewsCollection.find().toArray();
-//       res.send(result);
-//     });
-
-//     app.get("/carts", async (req, res) => {
-//       const email = req.query.email;
-//       const query = { email: email };
-//       const result = await cartsCollection.find(query).toArray();
-//       res.send(result);
-//     });
-
-//     //
-//     app.get("/menu/:id", async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await menuCollection.findOne(query);
-//       res.send(result);
-//     });
-
-//     //
-//     app.patch("/menu/:id", async (req, res) => {
-//       const id = req.params.id;
-//       const item = req.body;
-//       const query = { _id: new ObjectId(id) };
-//       const updatedDoc = {
-//         $set: {
-//           name: item.name,
-//           category: item.category,
-//           price: item.price,
-//           recipe: item.recipe,
-//           image: item.image,
-//         },
-//       };
-//       const result = await menuCollection.updateOne(query, updatedDoc);
-//       res.send(result);
-//     });
-
-//     // carts collection
-
-//     app.post("/carts", async (req, res) => {
-//       const cartItem = req.body;
-//       const result = await cartsCollection.insertOne(cartItem);
-//       res.send(result);
-//     });
-
-//     // delete
-
-//     app.delete("/carts/:id", async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await cartsCollection.deleteOne(query);
-//       res.send(result);
-//     });
-
-//     app.delete("/menu/:id", verifyToken, verifyAdmin, async (req, res) => {
-//       const id = req.params.id;
-//       const query = { _id: new ObjectId(id) };
-//       const result = await menuCollection.deleteOne(query);
-//       res.send(result);
-//     });
-
-//     // Payment intend
-//     app.post("/create-payment-intent", async (req, res) => {
-//       const { price } = req.body;
-//       const amount = parseInt(price * 100);
-
-//       // console.log(amount)
-//       const paymentIntent = await stripe.paymentIntents.create({
-//         amount: amount,
-//         currency: "usd",
-//         payment_method_types: ["card"],
-//       });
-
-//       res.send({
-//         clientSecret: paymentIntent.client_secret,
-//       });
-//     });
-
-//     app.post("/payments", async (req, res) => {
-//       const payment = req.body;
-//       const paymentResult = await paymentCollection.insertOne(payment);
-
-//       // delete
-//       const query = {
-//         _id: {
-//           $in: payment.cartIds.map((id) => new ObjectId(id)),
-//         },
-//       };
-//       const deleteResult = await cartsCollection.deleteMany(query);
-//       res.send({ paymentResult, deleteResult });
-//     });
-
-//     app.get("/payments/:email", verifyToken, async (req, res) => {
-//       const query = { email: req.params.email };
-//       if (req.params.email !== req.decoded.email) {
-//         return res.status(403).send({ message: "forbidden access" });
-//       }
-//       const result = await paymentCollection.find(query).toArray();
-//       res.send(result);
-//     });
-
-//     // statts
-//     app.get("/admin-stats", verifyToken, verifyAdmin, async (req, res) => {
-//       const users = await usersCollection.estimatedDocumentCount();
-//       const menuItems = await menuCollection.estimatedDocumentCount();
-//       const orders = await paymentCollection.estimatedDocumentCount();
-
-//       // not best way
-//       // const payments = await paymentCollection.find().toArray();
-//       // const revenue = payments.reduce((total, item)=> total + item.price , 0)
-
-//       const result = await paymentCollection
-//         .aggregate([
-//           {
-//             $group: {
-//               _id: null,
-//               totalRevenue: {
-//                 $sum: "$price",
-//               },
-//             },
-//           },
-//         ])
-//         .toArray();
-//       const revenue = result.length > 0 ? result[0].totalRevenue : 0;
-
-//       res.send({ users, menuItems, orders, revenue });
-//     });
-
-//     //  using aggregate pipeline
-
-//     app.get("/order-stats", async (req, res) => {
-//       const result = await paymentCollection
-//         .aggregate([
-//           {
-//             $unwind: "$menuItemIds",
-//           },
-//           {
-//             $lookup: {
-//               from: "menu",
-//               localField: "menuItemIds",
-//               foreignField: "_id",
-//               as: "menuItems",
-//             },
-//           },
-//           {
-//             $unwind: "$menuItems",
-//           },
-//           {
-//             $group: {
-//               _id: "$menuItems.category",
-//               quantity: {
-//                 $sum: 1,
-//               },
-//               revenue: { $sum: "$menuItems.price" },
-//             },
-//           },
-//         ])
-//         .toArray();
-//       res.send(result);
-//     });
-
-//     await client.db("admin").command({ ping: 1 });
-//     console.log(
-//       "Pinged your deployment. You successfully connected to MongoDB!"
-//     );
-//   } finally {
-//   }
-// }
-// run().catch(console.dir);
-
-// app.get("/", (req, res) => {
-//   res.send("Bistro boss is running");
-// });
-
-// app.listen(port, () => {
-//   console.log("Bistro Boss is running in port", port);
-// });
